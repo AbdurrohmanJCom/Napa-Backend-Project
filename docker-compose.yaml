@@ -1,0 +1,87 @@
+version: '3.9'
+
+services:
+  web:
+    container_name: web
+    build: .
+    command: sh -c "cron && ./wait-for-it.sh db:5432 -- sh -c 'python manage.py migrate && python manage.py runserver 0.0.0.0:8000'"
+    volumes:
+      - .:/code
+    ports:
+      - "8000:8000"
+    environment:
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_HOST: ${DATABASE_HOST}
+      DB_PORT: ${DATABASE_HOST}
+      CACHE_URL: redis://redis:6379/1
+    depends_on:
+      - db
+
+  db:
+    container_name: db
+    image: postgres:16
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "5432:5432"
+
+  celery:
+    container_name: Celery
+    build: .
+    command: celery -A static worker --loglevel=info
+    volumes:
+      - .:/code
+    environment:
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DATABASE_HOST: ${DATABASE_HOST}
+      DATABASE_PORT: ${DATABASE_PORT}
+    depends_on:
+      - redis
+      - db
+
+  celery-beat:
+    container_name: Celery-beat
+    build: .
+    command: celery -A static beat --loglevel=info
+    volumes:
+      - .:/code
+    environment:
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DATABASE_HOST: ${DATABASE_HOST}
+      DATABASE_PORT: ${DATABASE_PORT}
+    depends_on:
+      - redis
+      - db
+
+  redis:
+    container_name: Redis
+    image: redis:latest
+    ports:
+      - "6379:6379"
+
+  cron:
+    container_name: Cron
+    build: .
+    command: sh -c "cron && tail -f /var/log/cron.log"
+    volumes:
+      - .:/code
+    depends_on:
+      - db
+
+networks:
+  default:
+    driver: bridge
+
+volumes:
+  pgdata:
+
